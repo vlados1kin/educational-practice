@@ -1552,7 +1552,7 @@ begin
   else
     WriteLn('Дефицитные вакансии не найдены');
 
-  if IsFoundV or IsFoundD then
+  if IsFoundV and IsFoundD then
   begin
     WriteLn('Внести результат в текстовый файл (да/нет)');
     if YesNo then
