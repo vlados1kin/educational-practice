@@ -10,8 +10,9 @@ uses
 var
   vHead: PVacancy;
   cHead: PCandidate;
-  pvHead: PPossibleVacancy;
-  vIndex, cIndex: Integer;
+  dHead, dTemp: PDeficit;
+  pvHead, pvTemp: PPossibleVacancy;
+  vIndex, cIndex, chMode: Integer;
 
 procedure ClearConsole(const Position: Integer);
 var
@@ -28,7 +29,7 @@ begin
   SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), cursor);
 end;
 
-function CorrectRead(const First, Last: Integer): Integer;
+function CorrectChoice(const First, Last: Integer): Integer;
 var
   Input: String;
   Error: Integer;
@@ -43,7 +44,7 @@ begin
   until (Error = 0) and Correct;
 end;
 
-function CorrectInt: Integer;
+function CorrectInteger: Integer;
 var
   Input: String;
   Error: Integer;
@@ -56,7 +57,66 @@ begin
   until Error = 0;
 end;
 
-procedure ReadFromFile(vHead: PVacancy; cHead: PCandidate);
+function CorrectBirthDate: TDateTime;
+var
+  Year, Month, Day: Integer;
+  LeapYear: Boolean;
+  MaxDaysInMonth: Integer;
+begin
+  repeat
+    WriteLn('Введите год рождения (1900-', YearOf(Now), ')');
+    Year := CorrectInteger;
+    if (Year < 1900) or (Year > YearOf(Now)) then
+      WriteLn(ErrorMessage);
+  until (Year >= 1900) and (Year <= YearOf(Now));
+
+  repeat
+    WriteLn('Введите месяц рождения (1-12)');
+    Month := CorrectInteger;
+    if (Month < 1) or (Month > 12) then
+      WriteLn(ErrorMessage);
+  until (Month >= 1) and (Month <= 12);
+
+  LeapYear := IsLeapYear(Year);
+  MaxDaysInMonth := MonthDays[LeapYear, Month];
+
+  repeat
+    WriteLn('Введите день рождения (1-', MaxDaysInMonth, ')');
+    Day := CorrectInteger;
+    if (Day < 1) or (Day > MaxDaysInMonth) then
+      WriteLn(ErrorMessage);
+  until (Day >= 1) and (Day <= MaxDaysInMonth);
+
+  Result := EncodeDate(Year, Month, Day);
+end;
+
+function YesNo: Boolean;
+var
+  Input: String;
+begin
+  Result := False;
+  repeat
+    ReadLn(Input);
+    Input := LowerCase(Trim(Input));
+    if Input = 'да' then
+      Result := True
+    else if Input = 'нет' then
+      Result := False
+    else
+      WriteLn(ErrorMessage);
+  until (Input = 'да') or (Input = 'нет');
+end;
+
+function YesNoToStr(var Input: Boolean): String;
+begin
+  if Input then
+    Result := 'Да'
+  else
+    Result := 'Нет';
+end;
+
+procedure ReadFromFile(vHead: PVacancy; cHead: PCandidate;
+  var vIndex, cIndex: Integer);
 var
   FVacancy: FileVacancy;
   FCandidate: FileCandidate;
@@ -65,48 +125,51 @@ var
   cTemp: PCandidate;
   cInfo: TCandidateInfo;
 begin
-  Assign(FVacancy, 'ListOfVacancies');
-  Reset(FVacancy);
-  Read(FVacancy, vInfo);
-  vIndex := vInfo.Index;
-  vTemp := vHead;
-
-  while not EOF(FVacancy) do
-  begin
-    New(vTemp^.Adr);
+  try
+    Assign(FVacancy, 'ListOfVacancies');
+    Reset(FVacancy);
     Read(FVacancy, vInfo);
-    vTemp := vTemp^.Adr;
-    vTemp^.Info := vInfo;
-    vTemp^.Adr := Nil;
-  end;
+    vIndex := vInfo.Index;
+    vTemp := vHead;
 
-  Assign(FCandidate, 'ListOfCandidates');
-  Reset(FCandidate);
-  Read(FCandidate, cInfo);
-  cIndex := cInfo.Index;
-  cTemp := cHead;
+    while not EOF(FVacancy) do
+    begin
+      New(vTemp^.Adr);
+      Read(FVacancy, vInfo);
+      vTemp := vTemp^.Adr;
+      vTemp^.Info := vInfo;
+      vTemp^.Adr := Nil;
+    end;
 
-  while not EOF(FCandidate) do
-  begin
-    New(cTemp^.Adr);
+    Assign(FCandidate, 'ListOfCandidates');
+    Reset(FCandidate);
     Read(FCandidate, cInfo);
-    cTemp := cTemp^.Adr;
-    cTemp^.Info := cInfo;
-    cTemp^.Adr := Nil;
+    cIndex := cInfo.Index;
+    cTemp := cHead;
+
+    while not EOF(FCandidate) do
+    begin
+      New(cTemp^.Adr);
+      Read(FCandidate, cInfo);
+      cTemp := cTemp^.Adr;
+      cTemp^.Info := cInfo;
+      cTemp^.Adr := Nil;
+    end;
+  except
+    WriteLn('Файлы не найдены');
+    Sleep(1500);
   end;
 end;
 
 procedure WriteInFile(vHead: PVacancy; cHead: PCandidate;
-  pvHead: PPossibleVacancy);
+  var vIndex, cIndex: Integer);
 var
   FVacancy: FileVacancy;
   FCandidate: FileCandidate;
-  FPossibleVacancy: TextFile;
   vTemp: PVacancy;
   vInfo: TVacancyInfo;
   cTemp: PCandidate;
   cInfo: TCandidateInfo;
-  pvTemp: PPossibleVacancy;
 begin
   Assign(FVacancy, 'ListOfVacancies');
   ReWrite(FVacancy);
@@ -134,88 +197,85 @@ begin
 
   CloseFile(FCandidate);
 
+end;
+
+procedure WriteInFileSpFunc(cTemp: PCandidate; vHead: PVacancy;
+  pvHead: PPossibleVacancy; dHead: PDeficit);
+var
+  FPossibleVacancy: TextFile;
+  vTemp: PVacancy;
+  pvTemp: PPossibleVacancy;
+  Temp: Boolean;
+begin
   Assign(FPossibleVacancy, 'ListOfPossibleCandidates.txt');
   ReWrite(FPossibleVacancy);
+
+  WriteLn(FPossibleVacancy,
+    ' ______________________________________________________Кандидат_____________________________________________________ ');
+
+  WriteLn(FPossibleVacancy, HeadCandidateList);
+  Write(FPossibleVacancy, HorizLineC);
+  with cTemp^.Info do
+    WriteLn(FPossibleVacancy, '|', Index:5, '|', FIO:32, '|',
+      DateToStr(BirthDay):13, '|', Specialization:19, '|', Post:13, '|',
+      Salary:9, '|', YesNoToStr(HighEdu):18, '|');
+  Write(FPossibleVacancy, HorizLineC);
+
+  WriteLn(FPossibleVacancy,
+    ' _________________________________________________Возможные вакансии________________________________________________ ');
+
+  Temp := False;
   pvTemp := pvHead;
   while pvTemp^.Adr <> nil do
   begin
     pvTemp := pvTemp^.Adr;
-    with pvTemp.Info do
-      WriteLn(FPossibleVacancy, '|', Index:12, '|', Firm:12, '|',
-        Specialization:12, '|', Post:12, '|', Salary:12, '|', Vacation:12, '|',
-        HighEdu:12, '|', RangeAge[min], '-', RangeAge[max]);
+    if not Temp then
+      WriteLn(FPossibleVacancy, HeadVacancyList);
+    Write(FPossibleVacancy, HorizLineV);
+    with pvTemp^.Info do
+      WriteLn(FPossibleVacancy, '|', Index:5, '|', Firm:15, '|',
+        Specialization:19, '|', Post:15, '|', Salary:11, '|', Vacation:12, '|',
+        YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-', RangeAge[max], '|');
+    Temp := True;
   end;
+  Write(FPossibleVacancy, HorizLineV);
+
+  WriteLn(FPossibleVacancy,
+    ' _________________________________________________Дефицитные вакансии_______________________________________________ ');
+  WriteLn(FPossibleVacancy, HeadVacancyList);
+  vTemp := vHead;
+  while vTemp^.Adr <> nil do
+  begin
+    vTemp := vTemp^.Adr;
+    dTemp := dHead;
+    while dTemp^.Adr <> nil do
+    begin
+      dTemp := dTemp^.Adr;
+      if (vTemp^.Info.Post = dTemp^.Info.Post) and (dTemp^.Info.Part < 0.1) then
+      begin
+        Write(FPossibleVacancy, HorizLineV);
+        with vTemp^.Info do
+          WriteLn(FPossibleVacancy, '|', Index:5, '|', Firm:15, '|',
+            Specialization:19, '|', Post:15, '|', Salary:11, '|', Vacation:12,
+            '|', YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+            RangeAge[max], '|');
+      end;
+    end;
+  end;
+  WriteLn(FPossibleVacancy, HorizLineV);
 
   CloseFile(FPossibleVacancy);
-
 end;
 
-function HaveHighEdu: Boolean;
-var
-  Input: String;
-begin
-  Result := False;
-  repeat
-    ReadLn(Input);
-    Input := LowerCase(Trim(Input));
-    if Input = 'да' then
-      Result := True
-    else if Input = 'нет' then
-      Result := False
-    else
-      WriteLn(ErrorMessage);
-  until (Input = 'да') or (Input = 'нет');
-end;
-
-function HaveToStr(var Input: Boolean): String;
-begin
-  if Input then
-    Result := 'Да'
-  else
-    Result := 'Нет';
-end;
-
-function ReadBirthDate: TDateTime;
-var
-  Year, Month, Day: Integer;
-  VisYear: Boolean;
-  MaxDaysInMonth: Integer;
-begin
-  repeat
-    WriteLn('Введите год рождения (от 1900 до ', YearOf(Now), ')');
-    Year := CorrectInt;
-    if (Year < 1900) or (Year > YearOf(Now)) then
-      WriteLn(ErrorMessage);
-  until (Year >= 1900) and (Year <= YearOf(Now));
-
-  repeat
-    WriteLn('Введите месяц рождения (1-12)');
-    Month := CorrectInt;
-    if (Month < 1) or (Month > 12) then
-      WriteLn(ErrorMessage);
-  until (Month >= 1) and (Month <= 12);
-
-  VisYear := IsLeapYear(Year);
-  MaxDaysInMonth := MonthDays[VisYear, Month];
-
-  repeat
-    WriteLn('Введите день рождения (1-', MaxDaysInMonth, ')');
-    Day := CorrectInt;
-    if (Day < 1) or (Day > MaxDaysInMonth) then
-      WriteLn(ErrorMessage);
-  until (Day >= 1) and (Day <= MaxDaysInMonth);
-
-  Result := EncodeDate(Year, Month, Day);
-end;
-
-procedure AddData(vHead: PVacancy; cHead: PCandidate);
+procedure AddData(vHead: PVacancy; cHead: PCandidate;
+  var vIndex, cIndex: Integer);
 var
   Choice, Count, I: Integer;
   vTemp: PVacancy;
   cTemp: PCandidate;
 begin
   WriteLn(AddText);
-  Choice := CorrectRead(1, 4);
+  Choice := CorrectChoice(1, 4);
   vTemp := vHead;
   cTemp := cHead;
   case Choice of
@@ -237,11 +297,11 @@ begin
           ReadLn(Post);
           Trim(String(Post));
           WriteLn('Введите оклад');
-          Salary := CorrectInt;
+          Salary := CorrectInteger;
           WriteLn('Введите количество дней отпуска');
-          Vacation := CorrectInt;
+          Vacation := CorrectInteger;
           WriteLn('Введите наличие высшего образования (да/нет)');
-          HighEdu := HaveHighEdu;
+          HighEdu := YesNo;
           WriteLn('Введите нижнюю границу возрастного диапазона');
           ReadLn(RangeAge[min]);
           WriteLn('Введите верхнюю границу возрастного диапазона');
@@ -263,7 +323,7 @@ begin
           WriteLn('Введите ФИО');
           ReadLn(FIO);
           Trim(String(FIO));
-          BirthDay := ReadBirthDate;
+          BirthDay := CorrectBirthDate;
           WriteLn('Введите специальность');
           ReadLn(Specialization);
           Trim(String(Specialization));
@@ -271,9 +331,9 @@ begin
           ReadLn(Post);
           Trim(String(Post));
           WriteLn('Введите оклад');
-          Salary := CorrectInt;
+          Salary := CorrectInteger;
           WriteLn('Введите наличие высшего образования (да/нет)');
-          HighEdu := HaveHighEdu;
+          HighEdu := YesNo;
           Index := cIndex;
           Inc(cIndex);
         end;
@@ -283,7 +343,7 @@ begin
     3:
       begin
         WriteLn('Введите количество записей');
-        Count := CorrectInt;
+        Count := CorrectInteger;
         for I := 1 to Count do
         begin
           while vTemp.Adr <> nil do
@@ -293,8 +353,8 @@ begin
           with vTemp^.Info do
           begin
             Firm := ShortString(TFirm[Random(7)]);
-            Specialization := ShortString(TSpecialization[Random(10)]);
-            Post := ShortString(TSpecialization[Random(10)]);
+            Specialization := ShortString(TSpecVacancy[Random(10)]);
+            Post := ShortString(TSpecVacancy[Random(10)]);
             Salary := TSalary[Random(6)];
             Vacation := TVacation[Random(5)];
             HighEdu := Bool(Random(2));
@@ -310,7 +370,7 @@ begin
     4:
       begin
         WriteLn('Введите количество записей');
-        Count := CorrectInt;
+        Count := CorrectInteger;
         for I := 1 to Count do
         begin
           while cTemp.Adr <> nil do
@@ -319,11 +379,11 @@ begin
           cTemp := cTemp^.Adr;
           with cTemp^.Info do
           begin
-            FIO := ShortString(TSurName[Random(5)] + ' ' + TName[Random(6)] + ' ' +
-              TOtch[Random(6)]);
+            FIO := ShortString(TSurName[Random(5)] + ' ' + TName[Random(6)] +
+              ' ' + TOtch[Random(6)]);
             BirthDay := Random(22000) + 15000;
-            Specialization := ShortString(TSpecialization[Random(10)]);
-            Post := ShortString(TSpecialization[Random(10)]);
+            Specialization := ShortString(TSpecCandidate[Random(10)]);
+            Post := ShortString(TSpecCandidate[Random(10)]);
             Salary := TSalary[Random(6)];
             HighEdu := Bool(Random(2));
             Index := cIndex;
@@ -334,11 +394,10 @@ begin
         WriteLn(SuccessMessage);
       end;
   end;
-  WriteLn(ContinueMessage);
-  ReadLn;
 end;
 
-function SearchData(vHead: PVacancy; cHead: PCandidate): Integer;
+function SearchData(vHead: PVacancy; cHead: PCandidate;
+  var chTemp: Integer): Boolean;
 var
   Choice, KeyInt: Integer;
   KeyStr: String;
@@ -348,19 +407,25 @@ var
   vTemp: PVacancy;
   cTemp: PCandidate;
 begin
-  WriteLn(SearchText);
-  Choice := CorrectRead(1, 2);
-  Result := Choice;
+  if chTemp = 0 then
+  begin
+    WriteLn(SearchText);
+    Choice := CorrectChoice(1, 2);
+    chTemp := Choice;
 
-  WriteLn(ContinueMessage);
-  ReadLn;
-  ClearConsole(0);
+    WriteLn(ContinueMessage);
+    ReadLn;
+    ClearConsole(0);
+  end
+  else
+    Choice := chTemp;
 
+  Result := True;
   case Choice of
     1:
       begin
         WriteLn(SearchMessageV);
-        Choice := CorrectRead(1, 8);
+        Choice := CorrectChoice(1, 8);
 
         WriteLn(ContinueMessage);
         ReadLn;
@@ -374,7 +439,7 @@ begin
         case Choice of
           1:
             begin
-              KeyInt := CorrectInt;
+              KeyInt := CorrectInteger;
               while vTemp^.Adr <> nil do
               begin
                 vTemp := vTemp^.Adr;
@@ -386,13 +451,16 @@ begin
                     Write(HorizLineV);
                     WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19,
                       '|', Post:15, '|', Salary:11, '|', Vacation:12, '|',
-                      HaveToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+                      YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
                       RangeAge[max], '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineV);
             end;
@@ -410,13 +478,16 @@ begin
                     Write(HorizLineV);
                     WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19,
                       '|', Post:15, '|', Salary:11, '|', Vacation:12, '|',
-                      HaveToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+                      YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
                       RangeAge[max], '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineV);
             end;
@@ -434,13 +505,16 @@ begin
                     Write(HorizLineV);
                     WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19,
                       '|', Post:15, '|', Salary:11, '|', Vacation:12, '|',
-                      HaveToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+                      YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
                       RangeAge[max], '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineV);
             end;
@@ -458,19 +532,22 @@ begin
                     Write(HorizLineV);
                     WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19,
                       '|', Post:15, '|', Salary:11, '|', Vacation:12, '|',
-                      HaveToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+                      YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
                       RangeAge[max], '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineV);
             end;
           5:
             begin
-              KeyInt := CorrectInt;
+              KeyInt := CorrectInteger;
               while vTemp^.Adr <> nil do
               begin
                 vTemp := vTemp^.Adr;
@@ -482,19 +559,22 @@ begin
                     Write(HorizLineV);
                     WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19,
                       '|', Post:15, '|', Salary:11, '|', Vacation:12, '|',
-                      HaveToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+                      YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
                       RangeAge[max], '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineV);
             end;
           6:
             begin
-              KeyInt := CorrectInt;
+              KeyInt := CorrectInteger;
               while vTemp^.Adr <> nil do
               begin
                 vTemp := vTemp^.Adr;
@@ -506,19 +586,22 @@ begin
                     Write(HorizLineV);
                     WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19,
                       '|', Post:15, '|', Salary:11, '|', Vacation:12, '|',
-                      HaveToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+                      YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
                       RangeAge[max], '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineV);
             end;
           7:
             begin
-              KeyEdu := HaveHighEdu;
+              KeyEdu := YesNo;
               while vTemp^.Adr <> nil do
               begin
                 vTemp := vTemp^.Adr;
@@ -530,13 +613,16 @@ begin
                     Write(HorizLineV);
                     WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19,
                       '|', Post:15, '|', Salary:11, '|', Vacation:12, '|',
-                      HaveToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+                      YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
                       RangeAge[max], '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineV);
             end;
@@ -558,13 +644,16 @@ begin
                     Write(HorizLineV);
                     WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19,
                       '|', Post:15, '|', Salary:11, '|', Vacation:12, '|',
-                      HaveToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+                      YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
                       RangeAge[max], '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineV);
             end;
@@ -573,7 +662,7 @@ begin
     2:
       begin
         WriteLn(SearchMessageС);
-        Choice := CorrectRead(1, 7);
+        Choice := CorrectChoice(1, 7);
 
         WriteLn(ContinueMessage);
         ReadLn;
@@ -587,7 +676,7 @@ begin
         case Choice of
           1:
             begin
-              KeyInt := CorrectInt;
+              KeyInt := CorrectInteger;
               while cTemp^.Adr <> nil do
               begin
                 cTemp := cTemp^.Adr;
@@ -599,12 +688,15 @@ begin
                     Write(HorizLineC);
                     WriteLn('|', Index:5, '|', FIO:32, '|', DateToStr(BirthDay)
                       :13, '|', Specialization:19, '|', Post:13, '|', Salary:9,
-                      '|', HaveToStr(HighEdu):18, '|');
+                      '|', YesNoToStr(HighEdu):18, '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineC);
             end;
@@ -622,18 +714,21 @@ begin
                     Write(HorizLineC);
                     WriteLn('|', Index:5, '|', FIO:32, '|', DateToStr(BirthDay)
                       :13, '|', Specialization:19, '|', Post:13, '|', Salary:9,
-                      '|', HaveToStr(HighEdu):18, '|');
+                      '|', YesNoToStr(HighEdu):18, '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineC);
             end;
           3:
             begin
-              KeyDate := ReadBirthDate;
+              KeyDate := CorrectBirthDate;
               while cTemp^.Adr <> nil do
               begin
                 cTemp := cTemp^.Adr;
@@ -645,12 +740,15 @@ begin
                     Write(HorizLineC);
                     WriteLn('|', Index:5, '|', FIO:32, '|', DateToStr(BirthDay)
                       :13, '|', Specialization:19, '|', Post:13, '|', Salary:9,
-                      '|', HaveToStr(HighEdu):18, '|');
+                      '|', YesNoToStr(HighEdu):18, '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineC);
             end;
@@ -668,12 +766,15 @@ begin
                     Write(HorizLineC);
                     WriteLn('|', Index:5, '|', FIO:32, '|', DateToStr(BirthDay)
                       :13, '|', Specialization:19, '|', Post:13, '|', Salary:9,
-                      '|', HaveToStr(HighEdu):18, '|');
+                      '|', YesNoToStr(HighEdu):18, '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineC);
             end;
@@ -691,18 +792,21 @@ begin
                     Write(HorizLineC);
                     WriteLn('|', Index:5, '|', FIO:32, '|', DateToStr(BirthDay)
                       :13, '|', Specialization:19, '|', Post:13, '|', Salary:9,
-                      '|', HaveToStr(HighEdu):18, '|');
+                      '|', YesNoToStr(HighEdu):18, '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineC);
             end;
           6:
             begin
-              KeyInt := CorrectInt;
+              KeyInt := CorrectInteger;
               while cTemp^.Adr <> nil do
               begin
                 cTemp := cTemp^.Adr;
@@ -714,18 +818,21 @@ begin
                     Write(HorizLineC);
                     WriteLn('|', Index:5, '|', FIO:32, '|', DateToStr(BirthDay)
                       :13, '|', Specialization:19, '|', Post:13, '|', Salary:9,
-                      '|', HaveToStr(HighEdu):18, '|');
+                      '|', YesNoToStr(HighEdu):18, '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineC);
             end;
           7:
             begin
-              KeyEdu := HaveHighEdu;
+              KeyEdu := YesNo;
               while cTemp^.Adr <> nil do
               begin
                 cTemp := cTemp^.Adr;
@@ -737,12 +844,15 @@ begin
                     Write(HorizLineC);
                     WriteLn('|', Index:5, '|', FIO:32, '|', DateToStr(BirthDay)
                       :13, '|', Specialization:19, '|', Post:13, '|', Salary:9,
-                      '|', HaveToStr(HighEdu):18, '|');
+                      '|', YesNoToStr(HighEdu):18, '|');
                     IsFound := True;
                   end;
               end;
               if not IsFound then
-                WriteLn(NotFoundMessage)
+              begin
+                WriteLn(NotFoundMessage);
+                Result := False;
+              end
               else
                 Write(HorizLineC);
             end;
@@ -753,203 +863,211 @@ end;
 
 procedure DeleteData(vHead: PVacancy; cHead: PCandidate);
 var
-  Index, Choice: Integer;
+  Index, Choice, chTemp: Integer;
   IsDeleted: Boolean;
   vTempCurr, vTempPrev: PVacancy;
   cTempCurr, cTempPrev: PCandidate;
 begin
-  Choice := SearchData(vHead, cHead);
-  WriteLn('Введите индекс записи для удаления');
-  Index := CorrectInt;
-  IsDeleted := False;
-  case Choice of
-    1:
-      begin
-        vTempCurr := vHead;
-        vTempPrev := nil;
-        while (vTempCurr <> nil) and not IsDeleted do
+  chTemp := 0;
+  if SearchData(vHead, cHead, chTemp) then
+  begin
+    Choice := chTemp;
+    WriteLn('Введите индекс записи для удаления');
+    Index := CorrectInteger;
+    IsDeleted := False;
+    case Choice of
+      1:
         begin
-          if (vTempCurr^.Info.Index = Index) and (vTempCurr <> vHead) then
+          vTempCurr := vHead;
+          vTempPrev := nil;
+          while (vTempCurr <> nil) and not IsDeleted do
           begin
-            if vTempPrev = nil then
-              vHead := vTempCurr^.Adr
-            else
-              vTempPrev^.Adr := vTempCurr^.Adr;
-            Dispose(vTempCurr);
-            IsDeleted := True;
+            if (vTempCurr^.Info.Index = Index) and (vTempCurr <> vHead) then
+            begin
+              if vTempPrev = nil then
+                vHead := vTempCurr^.Adr
+              else
+                vTempPrev^.Adr := vTempCurr^.Adr;
+              Dispose(vTempCurr);
+              IsDeleted := True;
+            end;
+            if not IsDeleted then
+            begin
+              vTempPrev := vTempCurr;
+              vTempCurr := vTempCurr^.Adr;
+            end;
           end;
-          if not IsDeleted then
-          begin
-            vTempPrev := vTempCurr;
-            vTempCurr := vTempCurr^.Adr;
-          end;
+          if IsDeleted then
+            WriteLn(SuccessMessage)
+          else
+            WriteLn('Запись не найдена');
         end;
-        if IsDeleted then
-          WriteLn(SuccessMessage)
-        else
-          WriteLn('Запись не найдена');
-      end;
-    2:
-      begin
-        cTempCurr := cHead;
-        cTempPrev := nil;
-        while (cTempCurr <> nil) and not IsDeleted do
+      2:
         begin
-          if (cTempCurr^.Info.Index = Index) and (cTempCurr <> cHead) then
+          cTempCurr := cHead;
+          cTempPrev := nil;
+          while (cTempCurr <> nil) and not IsDeleted do
           begin
-            if cTempPrev = nil then
-              cHead := cTempCurr^.Adr
-            else
-              cTempPrev^.Adr := cTempCurr^.Adr;
-            Dispose(cTempCurr);
-            IsDeleted := True;
+            if (cTempCurr^.Info.Index = Index) and (cTempCurr <> cHead) then
+            begin
+              if cTempPrev = nil then
+                cHead := cTempCurr^.Adr
+              else
+                cTempPrev^.Adr := cTempCurr^.Adr;
+              Dispose(cTempCurr);
+              IsDeleted := True;
+            end;
+            if not IsDeleted then
+            begin
+              cTempPrev := cTempCurr;
+              cTempCurr := cTempCurr^.Adr;
+            end;
           end;
-          if not IsDeleted then
-          begin
-            cTempPrev := cTempCurr;
-            cTempCurr := cTempCurr^.Adr;
-          end;
+          if IsDeleted then
+            WriteLn(SuccessMessage)
+          else
+            WriteLn('Запись не найдена');
         end;
-        if IsDeleted then
-          WriteLn(SuccessMessage)
-        else
-          WriteLn('Запись не найдена');
-      end;
+    end;
   end;
 end;
 
 procedure EditData(vHead: PVacancy; cHead: PCandidate);
 var
-  Choice, Index, KeyInt: Integer;
+  Choice, Index, KeyInt, chTemp: Integer;
   IsFound, KeyEdu: Boolean;
   KeyDate: TDateTime;
   KeyRange: TRangeAge;
   vTemp: PVacancy;
   cTemp: PCandidate;
 begin
-  Choice := SearchData(vHead, cHead);
-  WriteLn('Введите индекс записи для редактирования');
-  Index := CorrectInt;
-
-  IsFound := False;
-
-  vTemp := vHead;
-  cTemp := cHead;
-
-  case Choice of
-    1:
-      while (vTemp.Adr <> nil) and not IsFound do
-      begin
-        vTemp := vTemp^.Adr;
-        if vTemp^.Info.Index = Index then
-          IsFound := True;
-      end;
-    2:
-      while (cTemp.Adr <> nil) and not IsFound do
-      begin
-        cTemp := cTemp^.Adr;
-        if cTemp^.Info.Index = Index then
-          IsFound := True;
-      end;
-  end;
-
-  if IsFound then
+  chTemp := 0;
+  if SearchData(vHead, cHead, chTemp) then
   begin
+    WriteLn('Введите индекс записи для редактирования');
+    Index := CorrectInteger;
+
+    IsFound := False;
+
+    vTemp := vHead;
+    cTemp := cHead;
+
+    Choice := chTemp;
+
     case Choice of
       1:
+        while (vTemp.Adr <> nil) and not IsFound do
         begin
-          WriteLn(EditMessageV);
-          Choice := CorrectRead(1, 7);
-
-          WriteLn('Введите новое содержание поля');
-          with vTemp^.Info do
-            case Choice of
-              1:
-                ReadLn(Firm);
-              2:
-                ReadLn(Specialization);
-              3:
-                ReadLn(Post);
-              4:
-                begin
-                  KeyInt := CorrectInt;
-                  Salary := KeyInt;
-                end;
-              5:
-                begin
-                  KeyInt := CorrectInt;
-                  Vacation := KeyInt;
-                end;
-              6:
-                begin
-                  KeyEdu := HaveHighEdu;
-                  HighEdu := KeyEdu;
-                end;
-              7:
-                begin
-                  WriteLn('Введите нижнюю границу возрастного диапазона');
-                  ReadLn(KeyRange[min]);
-                  WriteLn('Введите верхнюю границу возрастного диапазона');
-                  ReadLn(KeyRange[max]);
-                  RangeAge[min] := KeyRange[min];
-                  RangeAge[max] := KeyRange[max];
-                end;
-            end;
-
-          WriteLn(SuccessMessage);
+          vTemp := vTemp^.Adr;
+          if vTemp^.Info.Index = Index then
+            IsFound := True;
         end;
       2:
+        while (cTemp.Adr <> nil) and not IsFound do
         begin
-          WriteLn(EditMessageС);
-          Choice := CorrectRead(1, 6);
-
-          WriteLn('Введите новое содержание поля');
-          with cTemp^.Info do
-            case Choice of
-              1:
-                ReadLn(FIO);
-              2:
-                begin
-                  KeyDate := ReadBirthDate;
-                  BirthDay := KeyDate;
-                end;
-              3:
-                ReadLn(Specialization);
-              4:
-                ReadLn(Post);
-              5:
-                begin
-                  KeyInt := CorrectInt;
-                  Salary := KeyInt;
-                end;
-              6:
-                begin
-                  KeyEdu := HaveHighEdu;
-                  HighEdu := KeyEdu;
-                end;
-            end;
-
-          WriteLn(SuccessMessage);
+          cTemp := cTemp^.Adr;
+          if cTemp^.Info.Index = Index then
+            IsFound := True;
         end;
     end;
-  end
-  else
-    WriteLn(NotFoundMessage);
-  WriteLn(ContinueMessage);
-  ReadLn;
+
+    if IsFound then
+    begin
+      case Choice of
+        1:
+          begin
+            WriteLn(EditMessageV);
+            Choice := CorrectChoice(1, 7);
+
+            WriteLn('Введите новое содержание поля');
+            with vTemp^.Info do
+              case Choice of
+                1:
+                  ReadLn(Firm);
+                2:
+                  ReadLn(Specialization);
+                3:
+                  ReadLn(Post);
+                4:
+                  begin
+                    KeyInt := CorrectInteger;
+                    Salary := KeyInt;
+                  end;
+                5:
+                  begin
+                    KeyInt := CorrectInteger;
+                    Vacation := KeyInt;
+                  end;
+                6:
+                  begin
+                    KeyEdu := YesNo;
+                    HighEdu := KeyEdu;
+                  end;
+                7:
+                  begin
+                    WriteLn('Введите нижнюю границу возрастного диапазона');
+                    ReadLn(KeyRange[min]);
+                    WriteLn('Введите верхнюю границу возрастного диапазона');
+                    ReadLn(KeyRange[max]);
+                    RangeAge[min] := KeyRange[min];
+                    RangeAge[max] := KeyRange[max];
+                  end;
+              end;
+
+            WriteLn(SuccessMessage);
+          end;
+        2:
+          begin
+            WriteLn(EditMessageС);
+            Choice := CorrectChoice(1, 6);
+
+            WriteLn('Введите новое содержание поля');
+            with cTemp^.Info do
+              case Choice of
+                1:
+                  ReadLn(FIO);
+                2:
+                  begin
+                    KeyDate := CorrectBirthDate;
+                    BirthDay := KeyDate;
+                  end;
+                3:
+                  ReadLn(Specialization);
+                4:
+                  ReadLn(Post);
+                5:
+                  begin
+                    KeyInt := CorrectInteger;
+                    Salary := KeyInt;
+                  end;
+                6:
+                  begin
+                    KeyEdu := YesNo;
+                    HighEdu := KeyEdu;
+                  end;
+              end;
+            WriteLn(SuccessMessage);
+          end;
+      end;
+    end
+    else
+      WriteLn(NotFoundMessage);
+  end;
 end;
 
-procedure ShowList(vHead: PVacancy; cHead: PCandidate);
+procedure ShowData(vHead: PVacancy; cHead: PCandidate);
 var
   Choice: Integer;
   vTemp: PVacancy;
   cTemp: PCandidate;
 begin
   WriteLn(ShowText);
-  Choice := CorrectRead(1, 2);
+  Choice := CorrectChoice(1, 2);
+
   WriteLn(ContinueMessage);
   ReadLn;
   ClearConsole(0);
+
   case Choice of
     1:
       begin
@@ -961,12 +1079,11 @@ begin
           Write(HorizLineV);
           with vTemp^.Info do
             WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19, '|',
-              Post:15, '|', Salary:11, '|', Vacation:12, '|', HaveToStr(HighEdu)
-              :18, '|', RangeAge[min]:10, '-', RangeAge[max], '|');
+              Post:15, '|', Salary:11, '|', Vacation:12, '|',
+              YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+              RangeAge[max], '|');
         end;
         WriteLn(HorizLineV);
-        WriteLn(ContinueMessage);
-        ReadLn;
       end;
     2:
       begin
@@ -979,11 +1096,9 @@ begin
           with cTemp^.Info do
             WriteLn('|', Index:5, '|', FIO:32, '|', DateToStr(BirthDay):13, '|',
               Specialization:19, '|', Post:13, '|', Salary:9, '|',
-              HaveToStr(HighEdu):18, '|');
+              YesNoToStr(HighEdu):18, '|');
         end;
         WriteLn(HorizLineC);
-        WriteLn(ContinueMessage);
-        ReadLn;
       end;
   end;
 end;
@@ -995,7 +1110,7 @@ var
   cCurr, cNext, cTemp: PCandidate;
 begin
   WriteLn(SortText);
-  Choice := CorrectRead(1, 2);
+  Choice := CorrectChoice(1, 2);
 
   WriteLn(ContinueMessage);
   ReadLn;
@@ -1005,7 +1120,7 @@ begin
     1:
       begin
         WriteLn(SortMessageV);
-        Choice := CorrectRead(1, 8);
+        Choice := CorrectChoice(1, 8);
 
         case Choice of
           1:
@@ -1139,15 +1254,12 @@ begin
               end;
             end;
         end;
-
         WriteLn(SuccessMessage);
-        WriteLn(ContinueMessage);
-        ReadLn;
       end;
     2:
       begin
         WriteLn(SortMessageС);
-        Choice := CorrectRead(1, 7);
+        Choice := CorrectChoice(1, 7);
 
         case Choice of
           1:
@@ -1264,16 +1376,195 @@ begin
               end;
             end;
         end;
-
         WriteLn(SuccessMessage);
-        WriteLn(ContinueMessage);
-        ReadLn;
       end;
   end;
 end;
 
-procedure NewHead(var vHead: PVacancy; var cHead: PCandidate;
-  var pvHead: PPossibleVacancy);
+procedure SpecialFuntion(vHead: PVacancy; cHead: PCandidate;
+  pvHead: PPossibleVacancy);
+var
+  vTemp: PVacancy;
+  cTemp, cTempFound: PCandidate;
+  pvTemp: PPossibleVacancy;
+  dTemp: PDeficit;
+  KeyInt, chMode: Integer;
+  IsFoundI, IsFoundV, IsFoundD, Temp: Boolean;
+begin
+  chMode := 2;
+  if SearchData(vHead, cHead, chMode) then
+  begin
+    WriteLn('Введите индекс записи для подбора списка возможных вакансий');
+    KeyInt := CorrectInteger;
+    cTemp := cHead;
+    IsFoundI := False;
+    IsFoundV := False;
+    while (cTemp^.Adr <> nil) and not IsFoundI do
+    begin
+      cTemp := cTemp^.Adr;
+      if cTemp^.Info.Index = KeyInt then
+      begin
+        vTemp := vHead;
+        pvTemp := pvHead;
+        while vTemp^.Adr <> nil do
+        begin
+          vTemp := vTemp^.Adr;
+          if (vTemp^.Info.Specialization = cTemp^.Info.Specialization) and
+            (vTemp^.Info.Post = cTemp^.Info.Post) and
+            (vTemp^.Info.Salary >= cTemp^.Info.Salary) and
+            (vTemp^.Info.HighEdu = cTemp^.Info.HighEdu) and
+            ((vTemp^.Info.RangeAge[min] <= YearsBetween(cTemp^.Info.BirthDay,
+            Now)) and (vTemp^.Info.RangeAge[max] >=
+            YearsBetween(cTemp^.Info.BirthDay, Now))) then
+          begin
+            New(pvTemp^.Adr);
+            pvTemp := pvTemp^.Adr;
+            pvTemp.Info := vTemp.Info;
+            pvTemp^.Adr := nil;
+            IsFoundV := True;
+          end;
+        end;
+        IsFoundI := True;
+      end;
+    end;
+
+    cTempFound := cTemp;
+
+    if IsFoundV and IsFoundI then
+    begin
+      WriteLn('Возможные вакансии для данного кандидата: ');
+      pvTemp := pvHead;
+      Temp := False;
+      while pvTemp^.Adr <> nil do
+      begin
+        pvTemp := pvTemp^.Adr;
+        if not Temp then
+          WriteLn(HeadVacancyList);
+        Write(HorizLineV);
+        with pvTemp^.Info do
+          WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19, '|',
+            Post:15, '|', Salary:11, '|', Vacation:12, '|', YesNoToStr(HighEdu)
+            :18, '|', RangeAge[min]:10, '-', RangeAge[max], '|');
+        Temp := True;
+      end;
+      Write(HorizLineV);
+    end
+    else
+    begin
+      WriteLn(NotFoundMessage);
+    end;
+  end;
+
+  vTemp := vHead;
+  while vTemp^.Adr <> nil do
+  begin
+    vTemp := vTemp^.Adr;
+    dTemp := dHead;
+    IsFoundI := False;
+    while (dTemp^.Adr <> nil) and not IsFoundI do
+    begin
+      dTemp := dTemp^.Adr;
+      if vTemp^.Info.Post = dTemp^.Info.Post then
+      begin
+        Inc(dTemp^.Info.vCount);
+        IsFoundI := True;
+      end;
+    end;
+    if not IsFoundI then
+    begin
+      New(dTemp^.Adr);
+      dTemp := dTemp^.Adr;
+      dTemp^.Info.Post := vTemp^.Info.Post;
+      dTemp^.Info.vCount := 1;
+      dTemp^.Info.cCount := 0;
+      dTemp^.Adr := nil;
+    end;
+  end;
+
+  cTemp := cHead;
+  while cTemp^.Adr <> nil do
+  begin
+    cTemp := cTemp^.Adr;
+    dTemp := dHead;
+    IsFoundI := False;
+    while (dTemp^.Adr <> nil) and not IsFoundI do
+    begin
+      dTemp := dTemp^.Adr;
+      if cTemp^.Info.Post = dTemp^.Info.Post then
+      begin
+        Inc(dTemp^.Info.cCount);
+        IsFoundI := True;
+      end;
+    end;
+    if not IsFoundI then
+    begin
+      New(dTemp^.Adr);
+      dTemp := dTemp^.Adr;
+      dTemp^.Info.Post := cTemp^.Info.Post;
+      dTemp^.Info.vCount := 0;
+      dTemp^.Info.cCount := 1;
+      dTemp^.Adr := nil;
+    end;
+  end;
+
+  IsFoundD := False;
+  dTemp := dHead;
+  while dTemp.Adr <> nil do
+  begin
+    dTemp := dTemp^.Adr;
+    with dTemp^.Info do
+      try
+        Part := vCount / cCount;
+        // WriteLn('[ ', vCount, ' , ', cCount, ' ]');
+        if Part < 0.1 then
+          IsFoundD := True;
+      except
+        Part := MaxInt;
+      end;
+  end;
+
+  if IsFoundD then
+  begin
+    WriteLn('Список дефицитных вакансий:');
+    WriteLn(HeadVacancyList);
+    vTemp := vHead;
+    while vTemp^.Adr <> nil do
+    begin
+      vTemp := vTemp^.Adr;
+      dTemp := dHead;
+      while dTemp^.Adr <> nil do
+      begin
+        dTemp := dTemp^.Adr;
+        if (vTemp^.Info.Post = dTemp^.Info.Post) and (dTemp^.Info.Part < 0.1)
+        then
+        begin
+          Write(HorizLineV);
+          with vTemp^.Info do
+            WriteLn('|', Index:5, '|', Firm:15, '|', Specialization:19, '|',
+              Post:15, '|', Salary:11, '|', Vacation:12, '|',
+              YesNoToStr(HighEdu):18, '|', RangeAge[min]:10, '-',
+              RangeAge[max], '|');
+        end;
+      end;
+    end;
+    WriteLn(HorizLineV);
+  end
+  else
+    WriteLn('Дефицитные вакансии не найдены');
+
+  if IsFoundV or IsFoundD then
+  begin
+    WriteLn('Внести результат в текстовый файл (да/нет)');
+    if YesNo then
+    begin
+      WriteLn(SuccessMessage);
+      WriteInFileSpFunc(cTempFound, vHead, pvHead, dHead);
+    end;
+  end;
+end;
+
+procedure Initialize(var vHead: PVacancy; var cHead: PCandidate;
+  var pvHead: PPossibleVacancy; var dHead: PDeficit);
 begin
   New(vHead);
   vHead^.Adr := nil;
@@ -1281,14 +1572,17 @@ begin
   cHead^.Adr := nil;
   New(pvHead);
   pvHead^.Adr := nil;
+  New(dHead);
+  dHead^.Adr := nil;
 end;
 
-procedure DisposeHead(vHead: PVacancy; cHead: PCandidate;
-  pvHead: PPossibleVacancy);
+procedure Destroy(vHead: PVacancy; cHead: PCandidate; pvHead: PPossibleVacancy;
+  dHead: PDeficit);
 var
   vTemp: PVacancy;
   cTemp: PCandidate;
   pvTemp: PPossibleVacancy;
+  dTemp: PDeficit;
 begin
   vTemp := vHead^.Adr;
   while vTemp <> nil do
@@ -1297,6 +1591,7 @@ begin
     Dispose(vTemp);
     vTemp := vHead^.Adr;
   end;
+  vHead^.Adr := nil;
   Dispose(vHead);
 
   cTemp := cHead^.Adr;
@@ -1306,6 +1601,7 @@ begin
     Dispose(cTemp);
     cTemp := cHead^.Adr;
   end;
+  cHead^.Adr := nil;
   Dispose(cHead);
 
   pvTemp := pvHead^.Adr;
@@ -1315,7 +1611,18 @@ begin
     Dispose(pvTemp);
     pvTemp := pvHead^.Adr;
   end;
+  pvHead^.Adr := nil;
   Dispose(pvHead);
+
+  dTemp := dHead^.Adr;
+  while dTemp <> nil do
+  begin
+    dHead^.Adr := dTemp^.Adr;
+    Dispose(dTemp);
+    dTemp := dHead^.Adr;
+  end;
+  dHead^.Adr := nil;
+  Dispose(dHead);
 end;
 
 procedure Menu;
@@ -1324,25 +1631,38 @@ var
 begin
   repeat
     WriteLn(HelloMessage);
-    Choice := CorrectRead(1, 10);
+    Choice := CorrectChoice(1, 10);
     WriteLn(ContinueMessage);
     ReadLn;
     ClearConsole(0);
     case Choice of
       1:
-        ReadFromFile(vHead, cHead);
+        ReadFromFile(vHead, cHead, vIndex, cIndex);
       2:
-        ShowList(vHead, cHead);
+        begin
+          ShowData(vHead, cHead);
+          WriteLn(ContinueMessage);
+          ReadLn;
+        end;
       3:
-        SortData(vHead, cHead);
+        begin
+          SortData(vHead, cHead);
+          WriteLn(ContinueMessage);
+          ReadLn;
+        end;
       4:
         begin
-          SearchData(vHead, cHead);
+          chMode := 0;
+          SearchData(vHead, cHead, chMode);
           WriteLn(ContinueMessage);
           ReadLn;
         end;
       5:
-        AddData(vHead, cHead);
+        begin
+          AddData(vHead, cHead, vIndex, cIndex);
+          WriteLn(ContinueMessage);
+          ReadLn;
+        end;
       6:
         begin
           DeleteData(vHead, cHead);
@@ -1350,13 +1670,36 @@ begin
           ReadLn;
         end;
       7:
-        EditData(vHead, cHead);
+        begin
+          EditData(vHead, cHead);
+          WriteLn(ContinueMessage);
+          ReadLn;
+        end;
       8:
-        ;
+        begin
+          pvTemp := pvHead^.Adr;
+          while pvTemp <> nil do
+          begin
+            pvHead^.Adr := pvTemp^.Adr;
+            Dispose(pvTemp);
+            pvTemp := pvHead^.Adr;
+          end;
+          dTemp := dHead^.Adr;
+          while dTemp <> nil do
+          begin
+            dHead^.Adr := dTemp^.Adr;
+            Dispose(dTemp);
+            dTemp := dHead^.Adr;
+          end;
+          pvHead^.Adr := nil;
+          SpecialFuntion(vHead, cHead, pvHead);
+          WriteLn(ContinueMessage);
+          ReadLn;
+        end;
       9:
         ;
       10:
-        WriteInFile(vHead, cHead, pvHead);
+        WriteInFile(vHead, cHead, vIndex, cIndex);
     end;
     ClearConsole(0);
   until (Choice = 9) or (Choice = 10);
@@ -1366,8 +1709,8 @@ begin
   Randomize;
   vIndex := 1;
   cIndex := 1;
-  NewHead(vHead, cHead, pvHead);
+  Initialize(vHead, cHead, pvHead, dHead);
   Menu;
-  DisposeHead(vHead, cHead, pvHead);
+  Destroy(vHead, cHead, pvHead, dHead);
 
 end.

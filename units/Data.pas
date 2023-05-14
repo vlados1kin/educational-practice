@@ -72,10 +72,11 @@ const
   HorizLineC =
     '|_____|________________________________|_____________|___________________|_____________|_________|__________________|'
     + #10#13;
-  TSpecialization: array[0 .. 9] of String = ('Программист', 'Маркетолог', 'Инженер', 'Директор', 'Профессор', 'Учитель', 'Тестировщик', 'Аналитик', 'Инспектор', 'Менеджер');
+  TSpecVacancy: array[0 .. 9] of String = ('Программист', 'Маркетолог', 'Инженер', 'Директор', 'Профессор', 'Учитель', 'Тестировщик', 'Аналитик', 'Инспектор', 'Менеджер');
+  TSpecCandidate: array[0 .. 9] of String = ('Программист', 'Маркетолог', 'Программист', 'Директор', 'Программист', 'Программист', 'Программист', 'Программист', 'Инспектор', 'Программист');
   TName: array[0 .. 5] of String = ('Иван', 'Сергей', 'Евгений', 'Павел', 'Михал', 'Владимир');
   TOtch: array[0 .. 5] of String = ('Палыч', 'Сергеевич', 'Константинович', 'Владимирович', 'Николаевич', 'Дмитриевич');
-  TSurName: array[0 .. 4] of String = ('Новик', 'Кратович', 'Иванов', 'Осипов', 'Высоцкий');
+  TSurName: array[0 .. 4] of String = ('Новик', 'Дроздов', 'Иванов', 'Осипов', 'Высоцкий');
   TSalary: array[0 .. 5] of Integer = (3000, 4500, 6000, 9000, 12000, 15000);
   TFirm: array[0 .. 6] of String = ('ГГОЛ', 'БГУИР', 'SoftTeco', 'EPAM', 'Andersen', 'HardTeco', 'Itransition');
   TVacation: array[0 .. 4] of Integer = (21, 23, 25, 27, 28);
@@ -105,6 +106,13 @@ type
     HighEdu: boolean;
   end;
 
+  TDeficitInfo = record
+    Post: String[20];
+    vCount: Integer;
+    cCount: Integer;
+    Part: Real;
+  end;
+
   PVacancy = ^TVacancy;
 
   TVacancy = record
@@ -124,6 +132,13 @@ type
   TPossibleVacancy = record
     Info: TVacancyInfo;
     Adr: PPossibleVacancy;
+  end;
+
+  PDeficit = ^TDeficit;
+
+  TDeficit = record
+    Info: TDeficitInfo;
+    Adr: PDeficit;
   end;
 
   FileVacancy = file of TVacancyInfo;
