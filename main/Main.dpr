@@ -126,7 +126,7 @@ var
   cInfo: TCandidateInfo;
 begin
   try
-    Assign(FVacancy, 'ListOfVacancies');
+    Assign(FVacancy, 'ListOfVacancies.lbe');
     Reset(FVacancy);
     Read(FVacancy, vInfo);
     vIndex := vInfo.Index;
@@ -141,7 +141,7 @@ begin
       vTemp^.Adr := Nil;
     end;
 
-    Assign(FCandidate, 'ListOfCandidates');
+    Assign(FCandidate, 'ListOfCandidates.lbe');
     Reset(FCandidate);
     Read(FCandidate, cInfo);
     cIndex := cInfo.Index;
@@ -171,7 +171,7 @@ var
   cTemp: PCandidate;
   cInfo: TCandidateInfo;
 begin
-  Assign(FVacancy, 'ListOfVacancies');
+  Assign(FVacancy, 'ListOfVacancies.lbe');
   ReWrite(FVacancy);
   vInfo.Index := vIndex;
   Write(FVacancy, vInfo);
@@ -184,7 +184,7 @@ begin
 
   CloseFile(FVacancy);
 
-  Assign(FCandidate, 'ListOfCandidates');
+  Assign(FCandidate, 'ListOfCandidates.lbe');
   ReWrite(FCandidate);
   cInfo.Index := cIndex;
   Write(FCandidate, cInfo);
