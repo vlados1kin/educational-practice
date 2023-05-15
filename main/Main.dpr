@@ -1392,13 +1392,13 @@ var
   IsFoundI, IsFoundV, IsFoundD, Temp: Boolean;
 begin
   chMode := 2;
+  IsFoundI := False;
+  IsFoundV := False;
   if SearchData(vHead, cHead, chMode) then
   begin
     WriteLn('Введите индекс записи для подбора списка возможных вакансий');
     KeyInt := CorrectInteger;
     cTemp := cHead;
-    IsFoundI := False;
-    IsFoundV := False;
     while (cTemp^.Adr <> nil) and not IsFoundI do
     begin
       cTemp := cTemp^.Adr;
@@ -1451,6 +1451,7 @@ begin
     end
     else
     begin
+      IsFoundV := False;
       WriteLn(NotFoundMessage);
     end;
   end;
@@ -1550,9 +1551,12 @@ begin
     WriteLn(HorizLineV);
   end
   else
+  begin
+    IsFoundD := False;
     WriteLn('Дефицитные вакансии не найдены');
+  end;
 
-  if IsFoundV and IsFoundD then
+  if IsFoundV or IsFoundD then
   begin
     WriteLn('Внести результат в текстовый файл (да/нет)');
     if YesNo then
